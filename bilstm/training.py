@@ -86,8 +86,11 @@ class Model_Training:
         self.__max_sequence_len = max([len(x) for x in self.__input_sequences])
         self.__input_sequences = np.array(pad_sequences(self.__input_sequences, maxlen=self.__max_sequence_len, padding='pre'))
 
-        self.__train_dataset = tf.data.Dataset.from_tensor_slices((self.__input_sequences[:,:-1],self.__input_sequences[:,-1]))
-        self.__train_dataset = self.__train_dataset.shuffle(buffer_size=1024).batch(1024)
+        # self.__train_dataset = tf.data.Dataset.from_tensor_slices((self.__input_sequences[:,:-1],self.__input_sequences[:,-1]))
+        # self.__train_dataset = self.__train_dataset.shuffle(buffer_size=1024).
+        # batch(1024)
+        target_labels = self.__input_sequences[:, -1]
+        self.__target_labels = self.__input_sequences[:, 1:]
 
 
     def __createModel(self):
@@ -104,10 +107,13 @@ class Model_Training:
 
         model = Sequential()
         model.add(Embedding(self.__total_words, 100, input_length=self.__max_sequence_len-1))
-        model.add(Bidirectional(LSTM(150,return_sequences=True)))
-        model.add(Bidirectional(LSTM(150,return_sequences=True)))
-        model.add(Bidirectional(LSTM(150)))
+        
+        backward_layer = LSTM(150, activation='relu', return_sequences=True, go_backwards=True)
+
+        model.add(Bidirectional(LSTM(150,return_sequences=True),backward_layer=backward_layer))
+
         model.add(Dense(self.__total_words, activation='softmax'))
+
         adam = Adam(lr=0.01)
         model.compile(loss='sparse_categorical_crossentropy', optimizer=adam, metrics=['accuracy'])
 
@@ -129,8 +135,11 @@ class Model_Training:
         return model
     
     def __trainwithCPU(self):
+        
         model, checkpoint_callback = self.__createModel()
-        self.__history = model.fit(self.__train_dataset, batch_size = 512, epochs=150, verbose=1, callbacks=[checkpoint_callback])
+        
+        self.__history = model.fit(self.__input_sequences[:,:-1], self.__target_labels, batch_size = 512, epochs=300, verbose=1, callbacks=[checkpoint_callback])
+
         print(model.summary())
 
         return model
